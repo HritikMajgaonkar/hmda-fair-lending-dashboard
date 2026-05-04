@@ -195,15 +195,26 @@ if page == "🗺️  Map":
         """, unsafe_allow_html=True)
 
     with col_map:
-        # Merge tracts_geo with tract_stats — handle both possible key names
+        # ── DEBUG: show what columns and GEOIDs look like ─────────────────────
         ts = tract_stats.copy()
         if "GEOID" not in ts.columns and "census_tract" in ts.columns:
             ts = ts.rename(columns={"census_tract": "GEOID"})
-        ts["GEOID"] = ts["GEOID"].astype(str).str.zfill(11)
+        ts["GEOID"] = ts["GEOID"].astype(str).str.strip().str.zfill(11)
+
+        geo_geoids   = tracts_geo["GEOID"].astype(str).str.strip().str.zfill(11)
+        tracts_geo   = tracts_geo.copy()
+        tracts_geo["GEOID"] = geo_geoids
+
+        # Show debug info in the app temporarily
+        st.write("**DEBUG — tract_stats columns:**", ts.columns.tolist())
+        st.write("**DEBUG — tract_stats sample GEOIDs:**", ts["GEOID"].head(5).tolist())
+        st.write("**DEBUG — tracts_geo columns:**", [c for c in tracts_geo.columns if c != "geometry"])
+        st.write("**DEBUG — tracts_geo sample GEOIDs:**", tracts_geo["GEOID"].head(5).tolist())
+        st.write("**DEBUG — GEOID overlap:**", ts["GEOID"].isin(tracts_geo["GEOID"]).sum(), "of", len(ts))
 
         pl = tracts_geo.merge(ts, on="GEOID", how="left")
-        pl = pl[pl["total_applications"].notna()].copy()
-        pl = pl[pl["total_applications"] >= min_apps].copy()
+        st.write("**DEBUG — pl columns after merge:**", [c for c in pl.columns if c != "geometry"])
+        st.write("**DEBUG — total_applications non-null:**", pl["total_applications"].notna().sum() if "total_applications" in pl.columns else "MISSING")
         if county_fips: pl = pl[pl["GEOID"].str[:5]==county_fips]
         if "approval_rate" not in pl.columns: pl["approval_rate"] = 1 - pl["denial_rate"]
 
