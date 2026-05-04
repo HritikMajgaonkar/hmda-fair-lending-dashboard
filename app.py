@@ -72,7 +72,21 @@ def load_data():
 @st.cache_data
 def load_geo():
     import geopandas as gpd
-    return gpd.read_file("data/tracts.geojson")
+    gdf = gpd.read_file("data/tracts.geojson")
+    # Normalise GEOID column — it may load as index or under a different name
+    if "GEOID" not in gdf.columns:
+        # Try resetting index first
+        gdf = gdf.reset_index()
+    if "GEOID" not in gdf.columns:
+        # Find the 11-digit tract code column by content
+        for col in gdf.columns:
+            sample = gdf[col].dropna().astype(str)
+            if len(sample) > 0 and sample.iloc[0].isdigit() and len(sample.iloc[0]) == 11:
+                gdf = gdf.rename(columns={col: "GEOID"})
+                break
+    # Also normalise tract_stats merge key
+    gdf["GEOID"] = gdf["GEOID"].astype(str).str.zfill(11)
+    return gdf
 
 @st.cache_resource
 def load_model():
@@ -120,8 +134,11 @@ Answer concisely with specific numbers. Flag regulatory implications. Keep under
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('<div class="sec-label">Navigation</div>', unsafe_allow_html=True)
-    page = st.radio("", ["🗺️  Map","📊  Disparities","🏦  Lenders","🤖  SHAP Model","💬  AI Analyst"],
-                    label_visibility="collapsed")
+    page = st.radio(
+    "Navigation",
+    ["🗺️  Map","📊  Disparities","🏦  Lenders","🤖  SHAP Model","💬  AI Analyst"],
+    label_visibility="collapsed")
+
     st.markdown('<div class="sec-label" style="margin-top:1.5rem">Filters</div>', unsafe_allow_html=True)
     COUNTIES = {
         "All Counties":None, "Washington DC":"11001",
@@ -166,7 +183,11 @@ if page == "🗺️  Map":
     col_ctrl, col_map = st.columns([1, 3])
 
     with col_ctrl:
-        metric = st.radio("Color tracts by",["Denial Rate","Minority Pop %","Approval Rate"])
+        metric = st.radio(
+    "Color tracts by",
+    ["Denial Rate","Minority Pop %","Approval Rate"],
+    label_visibility="visible")
+
         mcol   = {"Denial Rate":"denial_rate","Minority Pop %":"minority_pct","Approval Rate":"approval_rate"}[metric]
         st.markdown("""
         <div class="finding danger">HH hotspot tracts: median <b>95.2%</b> minority pop.<br>LL coldspot tracts: <b>37.1%</b> minority pop.</div>
