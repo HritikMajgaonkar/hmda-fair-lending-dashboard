@@ -105,16 +105,15 @@ tract_stats["GEOID"] = tract_stats["GEOID"].astype(str).str.zfill(11)
 
 
 # ── Gemini ────────────────────────────────────────────────────────────────────
-def get_gemini():
+def get_ai_client():
     try:
-        import google.generativeai as genai
-        key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY",""))
+        from groq import Groq
+        key = st.secrets.get("GROQ_API_KEY", os.environ.get("GROQ_API_KEY",""))
         if not key: return None
-        genai.configure(api_key=key)
-        return genai.GenerativeModel("gemini-2.0-flash")
+        return Groq(api_key=key)
     except Exception: return None
 
-gemini = get_gemini()
+gemini = get_ai_client()
 
 SYSTEM_CTX = f"""You are a senior fair lending analyst specializing in HMDA analysis and ECOA enforcement.
 
@@ -375,7 +374,7 @@ elif page == "💬  AI Analyst":
     st.markdown('<div class="sec-label">AI Fair Lending Analyst — Powered by Gemini</div>', unsafe_allow_html=True)
 
     if gemini is None:
-        st.warning("Gemini API key not configured. Add GEMINI_API_KEY to Streamlit secrets.")
+        st.warning("Groq API key not configured. Add GROQ_API_KEY to Streamlit secrets.")
     else:
         st.markdown('<div class="finding info">Ask any question about the HMDA findings, methodology, regulatory implications, or specific lenders. Full context of all Phase 1–4 results is loaded.</div>', unsafe_allow_html=True)
 
@@ -400,12 +399,20 @@ elif page == "💬  AI Analyst":
             if user_q.strip():
                 with st.spinner("Analyzing..."):
                     try:
-                        resp=gemini.generate_content(f"{SYSTEM_CTX}\n\nUser question: {user_q}")
-                        ans=resp.text
+                        response = gemini.chat.completions.create(
+                            model="llama-3.3-70b-versatile",
+                            messages=[
+                                {"role": "system", "content": SYSTEM_CTX},
+                                {"role": "user",   "content": user_q}
+                            ],
+                            max_tokens=400,
+                            temperature=0.3,
+                        )
+                        ans = response.choices[0].message.content
                         st.markdown(f'<div class="user-label">You</div><div class="user-bubble">{user_q}</div><div class="ai-label">AI Analyst</div><div class="ai-bubble">{ans}</div>',unsafe_allow_html=True)
                         if "ch" not in st.session_state: st.session_state["ch"]=[]
                         st.session_state["ch"].insert(0,{"q":user_q,"a":ans})
-                    except Exception as e: st.error(f"Gemini error: {e}")
+                    except Exception as e: st.error(f"Groq error: {e}")
 
         if st.session_state.get("ch") and len(st.session_state["ch"])>1:
             st.markdown('<div class="sec-label" style="margin-top:1.5rem">Previous questions</div>', unsafe_allow_html=True)
