@@ -111,7 +111,7 @@ def get_gemini():
         key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY",""))
         if not key: return None
         genai.configure(api_key=key)
-        return genai.GenerativeModel("gemini-1.5-flash")
+        return genai.GenerativeModel("gemini-2.0-flash")
     except Exception: return None
 
 gemini = get_gemini()
