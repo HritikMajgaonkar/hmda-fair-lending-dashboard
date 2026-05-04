@@ -195,29 +195,24 @@ if page == "🗺️  Map":
         """, unsafe_allow_html=True)
 
     with col_map:
-        # ── DEBUG: show what columns and GEOIDs look like ─────────────────────
-        ts = tract_stats.copy()
-        if "GEOID" not in ts.columns and "census_tract" in ts.columns:
-            ts = ts.rename(columns={"census_tract": "GEOID"})
-        ts["GEOID"] = ts["GEOID"].astype(str).str.strip().str.zfill(11)
+        # tracts_geo already contains denial_rate, total_applications, minority_pct
+        # embedded from when the GeoJSON was saved in Colab — no merge needed
+        pl = tracts_geo.copy()
 
-        geo_geoids   = tracts_geo["GEOID"].astype(str).str.strip().str.zfill(11)
-        tracts_geo   = tracts_geo.copy()
-        tracts_geo["GEOID"] = geo_geoids
+        # Ensure numeric types
+        pl["total_applications"] = pd.to_numeric(pl["total_applications"], errors="coerce")
+        pl["denial_rate"]        = pd.to_numeric(pl["denial_rate"],        errors="coerce")
+        pl["minority_pct"]       = pd.to_numeric(pl["minority_pct"],       errors="coerce")
 
-        # Show debug info in the app temporarily
-        st.write("**DEBUG — tract_stats columns:**", ts.columns.tolist())
-        st.write("**DEBUG — tract_stats sample GEOIDs:**", ts["GEOID"].head(5).tolist())
-        st.write("**DEBUG — tracts_geo columns:**", [c for c in tracts_geo.columns if c != "geometry"])
-        st.write("**DEBUG — tracts_geo sample GEOIDs:**", tracts_geo["GEOID"].head(5).tolist())
-        st.write("**DEBUG — GEOID overlap:**", ts["GEOID"].isin(tracts_geo["GEOID"]).sum(), "of", len(ts))
+        # Add approval_rate if missing
+        if "approval_rate" not in pl.columns:
+            pl["approval_rate"] = 1 - pl["denial_rate"]
 
-        pl = tracts_geo.merge(ts, on="GEOID", how="left")
-        st.write("**DEBUG — pl columns after merge:**", [c for c in pl.columns if c != "geometry"])
-        st.write("**DEBUG — total_applications non-null:**", pl["total_applications"].notna().sum() if "total_applications" in pl.columns else "MISSING")
-        if county_fips: pl = pl[pl["GEOID"].str[:5]==county_fips]
-        if "approval_rate" not in pl.columns: pl["approval_rate"] = 1 - pl["denial_rate"]
-
+        # Filter
+        pl = pl[pl["total_applications"].notna()].copy()
+        pl = pl[pl["total_applications"] >= min_apps].copy()
+        if county_fips:
+            pl = pl[pl["GEOID"].str[:5] == county_fips].copy()
         center = [38.95,-77.05]; zoom = 10
         if county_fips and len(pl)>0:
             b=pl.total_bounds; center=[(b[1]+b[3])/2,(b[0]+b[2])/2]; zoom=11
